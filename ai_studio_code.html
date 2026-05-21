@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goal Achiever - Force Field Analysis</title>
+    <style>
+        :root {
+            --help-bg: #e8f5e9;
+            --help-dark: #2e7d32;
+            --stop-bg: #ffebee;
+            --stop-dark: #c62828;
+            --border-color: #ddd;
+            --primary-blue: #2196f3;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+
+        section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 { margin: 0; color: #222; }
+        h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; }
+
+        input[type="text"], select, textarea {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .goal-input { width: 100%; box-sizing: border-box; font-size: 1.2rem; }
+
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        .input-group input { flex-grow: 1; }
+
+        button {
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            transition: opacity 0.2s;
+        }
+
+        .btn-add { background: var(--primary-blue); color: white; }
+        .btn-reset { background: #666; color: white; }
+        .btn-delete { background: #ff5252; color: white; padding: 4px 8px; font-size: 12px; }
+        button:hover { opacity: 0.9; }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px thin #eee;
+        }
+
+        /* Force Field Styles */
+        .viz-container {
+            margin: 20px 0;
+            background: #eee;
+            height: 30px;
+            border-radius: 15px;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+        .viz-bar-help { background: var(--help-dark); transition: width 0.5s ease; height: 100%; }
+        .viz-bar-stop { background: var(--stop-dark); transition: width 0.5s ease; height: 100%; }
+        .viz-labels { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; }
+
+        .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .column { padding: 15px; border-radius: 6px; }
+        .col-help { background-color: var(--help-bg); }
+        .col-stop { background-color: var(--stop-bg); }
+
+        .ff-item {
+            background: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .ff-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+
+        /* Action Plan Styles */
+        .action-item {
+            border-left: 4px solid var(--primary-blue);
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fff;
+            display: grid;
+            grid-template-columns: 1fr 2fr 100px;
+            gap: 15px;
+            align-items: center;
+        }
+        .action-item.done { opacity: 0.5; text-decoration: line-through; background: #f0f0f0; }
+        .action-type { font-weight: bold; font-size: 0.8rem; text-transform: uppercase; }
+
+        @media (max-width: 600px) {
+            .columns, .action-item { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Goal Achiever</h1>
+        <button class="btn-reset" onclick="resetApp()">Start My Own</button>
+    </header>
+
+    <section>
+        <h2>My Goal</h2>
+        <input type="text" id="goalInput" class="goal-input" placeholder="What do you want to achieve?" oninput="updateGoal(this.value)">
+    </section>
+
+    <div class="columns">
+        <section class="column">
+            <h2>What Helps Me</h2>
+            <div class="input-group">
+                <input type="text" id="helpInput" placeholder="Add a driver...">
+                <button class="btn-add" onclick="addItem('helps')">Add</button>
+            </div>
+            <div id="helpsList"></div>
+        </section>
+
+        <section class="column">
+            <h2>What Stops Me</h2>
+            <div class="input-group">
+                <input type="text" id="stopInput" placeholder="Add a barrier...">
+                <button class="btn-add" onclick="addItem('stops')">Add</button>
+            </div>
+            <div id="stopsList"></div>
+        </section>
+    </div>
+
+    <section>
+        <h2>Force Field Analysis</h2>
+        <div class="viz-labels">
+            <span style="color: var(--help-dark)">Helps Total: <span id="helpScore">0</span></span>
+            <span style="color: var(--stop-dark)">Stops Total: <span id="stopScore">0</span></span>
+        </div>
+        <div class="viz-container">
+            <div id="helpBar" class="viz-bar-help" style="width: 50%"></div>
+            <div id="stopBar" class="viz-bar-stop" style="width: 50%"></div>
+        </div>
+
+        <div class="columns">
+            <div class="column col-help">
+                <h3>What Helps Me</h3>
+                <div id="ff-helps"></div>
+            </div>
+            <div class="column col-stop">
+                <h3>What Stops Me</h3>
+                <div id="ff-stops"></div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h2>My Action Plan</h2>
+        <div id="actionPlanList"></div>
+    </section>
+
+    <script>
+        // Data Structure
+        let state = {
+            goal: "",
+            helps: [],
+            stops: []
+        };
+
+        const exampleData = {
+            goal: "Finish my group project on time",
+            helps: [
+                { id: 1, text: "Clear deadline from professor", strength: 4, checked: true, action: "Use deadline to set team milestones", done: false },
+                { id: 2, text: "One teammate is very organized", strength: 3, checked: true, action: "Ask her to lead the timeline", done: false },
+                { id: 3, text: "Topic is interesting to me", strength: 2, checked: false, action: "", done: false }
+            ],
+            stops: [
+                { id: 4, text: "Team members have different schedules", strength: 4, checked: true, action: "Find one common 1-hour slot per week", done: false },
+                { id: 5, text: "Unclear who does what", strength: 5, checked: true, action: "Create shared task list at next meeting", done: false },
+                { id: 6, text: "Waiting for others before I can start my part", strength: 3, checked: false, action: "", done: false }
+            ]
+        };
+
+        // Initialize App
+        function init() {
+            const saved = localStorage.getItem('goalAchieverData');
+            if (saved) {
+                state = JSON.parse(saved);
+            } else {
+                state = JSON.parse(JSON.stringify(exampleData));
+            }
+            render();
+        }
+
+        // Save to Local Storage
+        function save() {
+            localStorage.setItem('goalAchieverData', JSON.stringify(state));
+            renderVisualization();
+        }
+
+        function resetApp() {
+            state = { goal: "", helps: [], stops: [] };
+            save();
+            render();
+        }
+
+        // Data Mutation Functions
+        function updateGoal(val) {
+            state.goal = val;
+            save();
+        }
+
+        function addItem(type) {
+            const input = document.getElementById(type === 'helps' ? 'helpInput' : 'stopInput');
+            if (!input.value.trim()) return;
+
+            const newItem = {
+                id: Date.now(),
+                text: input.value,
+                strength: 3,
+                checked: false,
+                action: "",
+                done: false
+            };
+
+            state[type].push(newItem);
+            input.value = "";
+            save();
+            render();
+        }
+
+        function deleteItem(type, id) {
+            state[type] = state[type].filter(item => item.id !== id);
+            save();
+            render();
+        }
+
+        function updateItem(type, id, key, value) {
+            const item = state[type].find(i => i.id === id);
+            if (item) {
+                item[key] = value;
+                save();
+                if (key === 'checked' || key === 'strength') render(); 
+            }
+        }
+
+        // UI Rendering
+        function render() {
+            document.getElementById('goalInput').value = state.goal;
+            
+            renderBasicList('helps', 'helpsList');
+            renderBasicList('stops', 'stopsList');
+            renderForceField('helps', 'ff-helps', 'Strengthen this');
+            renderForceField('stops', 'ff-stops', 'Weaken this');
+            renderActionPlan();
+            renderVisualization();
+        }
+
+        function renderBasicList(type, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = state[type].map(item => `
+                <div class="list-item">
+                    <span>${item.text}</span>
+                    <button class="btn-delete" onclick="deleteItem('${type}', ${item.id})">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        function renderForceField(type, containerId, label) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = state[type].map(item => `
+                <div class="ff-item">
+                    <strong>${item.text}</strong>
+                    <div class="ff-controls">
+                        <select onchange="updateItem('${type}', ${item.id}, 'strength', parseInt(this.value))">
+                            ${[1,2,3,4,5].map(n => `<option value="${n}" ${item.strength === n ? 'selected' : ''}>${n}</option>`).join('')}
+                        </select>
+                        <label>
+                            <input type="checkbox" ${item.checked ? 'checked' : ''} 
+                                   onchange="updateItem('${type}', ${item.id}, 'checked', this.checked)">
+                            ${label}
+                        </label>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderVisualization() {
+            const helpTotal = state.helps.reduce((acc, curr) => acc + curr.strength, 0);
+            const stopTotal = state.stops.reduce((acc, curr) => acc + curr.strength, 0);
+            const combined = helpTotal + stopTotal || 1; // avoid divide by zero
+
+            document.getElementById('helpScore').innerText = helpTotal;
+            document.getElementById('stopScore').innerText = stopTotal;
+
+            const helpWidth = (helpTotal / combined) * 100;
+            const stopWidth = (stopTotal / combined) * 100;
+
+            document.getElementById('helpBar').style.width = helpWidth + '%';
+            document.getElementById('stopBar').style.width = stopWidth + '%';
+        }
+
+        function renderActionPlan() {
+            const container = document.getElementById('actionPlanList');
+            const items = [
+                ...state.helps.filter(i => i.checked).map(i => ({...i, type: 'Strengthen', origin: 'helps'})),
+                ...state.stops.filter(i => i.checked).map(i => ({...i, type: 'Weaken', origin: 'stops'}))
+            ];
+
+            if (items.length === 0) {
+                container.innerHTML = "<p>Select items in the Force Field analysis to start your action plan.</p>";
+                return;
+            }
+
+            container.innerHTML = items.map(item => `
+                <div class="action-item ${item.done ? 'done' : ''}">
+                    <div>
+                        <div class="action-type" style="color: ${item.origin === 'helps' ? 'var(--help-dark)' : 'var(--stop-dark)'}">
+                            ${item.type}
+                        </div>
+                        <strong>${item.text}</strong>
+                    </div>
+                    <input type="text" placeholder="How will you do this?" value="${item.action}" 
+                           oninput="updateItem('${item.origin}', ${item.id}, 'action', this.value)"
+                           style="width: 100%">
+                    <label>
+                        <input type="checkbox" ${item.done ? 'checked' : ''} 
+                               onchange="updateItem('${item.origin}', ${item.id}, 'done', this.checked); render();">
+                        Done
+                    </label>
+                </div>
+            `).join('');
+        }
+
+        // Run app
+        init();
+    </script>
+</body>
+</html>
